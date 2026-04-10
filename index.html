@@ -335,14 +335,42 @@
     </div>
 
     <script>
-        let data = { clientes: [], os: [], agenda: [], nextOsId: 1 };
+       let data = { clientes: [], os: [], agenda: [], nextOsId: 1 };
         let editingCliId = null;
         let editingOsId = null;
 
-        function save() { localStorage.setItem('focos_art_v3', JSON.stringify(data)); }
-        function load() { 
-            const saved = localStorage.getItem('focos_art_v3'); 
-            if(saved) data = JSON.parse(saved); 
+        // COLE AQUI AS CHAVES QUE VOCÊ PEGOU NO JSONBIN.IO
+        const BIN_ID = "69d95264856a6821891de0c8";
+        const API_KEY = "$2a$10$0R9nV6JhwH7xVHsRv/1Ge.a7rZJG4qHvBD7jCNUQfG5up2.1uB5Tm";
+
+        async function save() { 
+            try {
+                await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': API_KEY
+                    },
+                    body: JSON.stringify(data)
+                });
+            } catch(erro) {
+                console.error("Erro ao salvar online:", erro);
+            }
+        }
+        
+        async function load() { 
+            try {
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+                    headers: { 'X-Master-Key': API_KEY }
+                });
+                const json = await res.json();
+                if(json.record && json.record.nextOsId) {
+                    data = json.record;
+                }
+            } catch(erro) {
+                console.error("Erro ao carregar online:", erro);
+                alert("Erro ao sincronizar com a nuvem. Verifique a internet.");
+            }
         }
 
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
@@ -728,8 +756,8 @@
         }
 
         // Inicialização
-        window.onload = () => {
-            load();
+        window.onload = async () => { // Adicionamos a palavra 'async' aqui
+            await load(); // Adicionamos a palavra 'await' aqui
             
             // Popula os selects de mês e ano
             const selMes = document.getElementById('filtro-mes');
