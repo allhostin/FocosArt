@@ -108,14 +108,19 @@
 </head>
 <body>
 
+    <!-- Tela de Carregamento (Acaba com o pisca-pisca de login) -->
+    <div id="loading-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: var(--bg-deep); z-index: 10000; display: flex; align-items: center; justify-content: center; color: white; font-size: 18px;">
+        <i class="fas fa-spinner fa-spin" style="margin-right: 10px;"></i> Conectando ao Banco de Dados...
+    </div>
+
     <!-- Tela de Login -->
-    <div id="login-screen">
+    <div id="login-screen" style="display: none;">
         <div class="login-box">
             <img src="focos.png" alt="Logo" style="height: 60px; object-fit: contain;">
             <h2>Acesso Restrito</h2>
-            <p style="font-size: 12px; color: var(--text-dim); margin-bottom: 15px;">Insira a Chave Mestra do Banco de Dados</p>
+            <p style="font-size: 12px; color: var(--text-dim); margin-bottom: 15px;">Insira sua senha de acesso</p>
             <form onsubmit="attemptLogin(event)">
-                <input type="password" id="login-key" placeholder="Cole a API Key aqui..." required autocomplete="off">
+                <input type="password" id="login-key" placeholder="Digite sua senha..." required autocomplete="off">
                 <button type="submit" class="primary" id="btn-login" style="width: 100%;">Entrar no Sistema</button>
             </form>
         </div>
@@ -297,67 +302,73 @@
         let editingCliId = null;
         let editingOsId = null;
 
-        // O BIN_ID pode ficar público, pois é só o "endereço". A senha foi removida!
+        // ===== SUAS CONFIGURAÇÕES =====
         const BIN_ID = "69d95264856a6821891de0c8";
-        let API_KEY = localStorage.getItem('focos_apiKey') || "";
+        const API_KEY_OCULTA = "$2a$10$0R9nV6JhwH7xVHsRv/1Ge.a7rZJG4qHvBD7jCNUQfG5up2.1uB5Tm";
+        
+        // COLOQUE SUA SENHA PERSONALIZADA AQUI:
+        const MINHA_SENHA = "equipefocos@2025"; 
 
-        // Tenta fazer o Login verificando a API KEY
-        async function attemptLogin(event) {
+        function attemptLogin(event) {
             event.preventDefault();
-            const keyInput = document.getElementById('login-key').value;
-            const btn = document.getElementById('btn-login');
-            btn.innerText = "Verificando...";
+            const senhaDigitada = document.getElementById('login-key').value;
             
-            try {
-                const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-                    headers: { 'X-Master-Key': keyInput }
-                });
-                
-                if (res.ok) {
-                    const json = await res.json();
-                    if(json.record && json.record.nextOsId) data = json.record;
-                    
-                    // Salva a chave no navegador e inicia o app
-                    API_KEY = keyInput;
-                    localStorage.setItem('focos_apiKey', keyInput);
-                    initApp();
-                } else {
-                    alert("Chave de segurança incorreta ou banco de dados não encontrado.");
-                    btn.innerText = "Entrar no Sistema";
-                }
-            } catch(e) {
-                alert("Erro de conexão com a internet.");
-                btn.innerText = "Entrar no Sistema";
+            if (senhaDigitada === MINHA_SENHA) {
+                // Senha correta! Salva que você está logado
+                localStorage.setItem('focos_logado', 'true');
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('loading-screen').style.display = 'flex';
+                carregarDadosDaNuvem(); // Baixa os dados
+            } else {
+                alert("Senha incorreta! Tente novamente.");
             }
         }
 
         function logout() {
-            if(confirm("Deseja realmente sair? Você precisará inserir a chave novamente depois.")) {
-                localStorage.removeItem('focos_apiKey');
+            if(confirm("Deseja realmente sair do sistema?")) {
+                localStorage.removeItem('focos_logado');
                 location.reload();
             }
         }
 
-        // Função Assíncrona para SALVAR na nuvem
+        async function carregarDadosDaNuvem() {
+            try {
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+                    headers: { 'X-Master-Key': API_KEY_OCULTA }
+                });
+                if (res.ok) {
+                    const json = await res.json();
+                    if(json.record && json.record.nextOsId) data = json.record;
+                    initApp();
+                } else {
+                    alert("Erro interno na chave do banco de dados.");
+                    logout();
+                }
+            } catch(e) {
+                alert("Verifique sua internet! Não foi possível baixar os dados.");
+                document.getElementById('loading-screen').innerHTML = "Sem conexão com a internet.";
+            }
+        }
+
         async function save() { 
             try {
-                const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+                await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-Master-Key': API_KEY
+                        'X-Master-Key': API_KEY_OCULTA
                     },
                     body: JSON.stringify(data)
                 });
-                if (!res.ok) throw new Error("Erro da API");
             } catch(erro) {
-                console.error("Erro ao salvar online:", erro);
-                alert("Houve um erro ao salvar na nuvem! Verifique sua internet.");
+                console.error("Erro ao salvar:", erro);
+                alert("Houve um erro ao salvar na nuvem!");
             }
         }
 
         // Configuração inicial quando logado com sucesso
         function initApp() {
+            document.getElementById('loading-screen').style.display = 'none'; // <-- ADICIONE APENAS ESTA LINHA AQUI
             document.getElementById('login-screen').style.display = 'none';
             document.querySelector('.top-header').style.display = 'flex';
             document.querySelector('.app-body').style.display = 'flex';
@@ -711,25 +722,15 @@
         }
 
         // Verifica ao abrir a página
-        window.onload = async () => {
-            if (API_KEY) {
-                // Tenta logar automaticamente com a chave salva
-                try {
-                    const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, { headers: { 'X-Master-Key': API_KEY } });
-                    if(res.ok) {
-                        const json = await res.json();
-                        if(json.record && json.record.nextOsId) data = json.record;
-                        initApp();
-                    } else {
-                        // Se a chave estiver errada ou tiver expirado, limpa e pede de novo
-                        localStorage.removeItem('focos_apiKey');
-                        document.getElementById('login-screen').style.display = 'flex';
-                    }
-                } catch(e) {
-                    alert("Você parece estar sem internet. Não foi possível conectar ao servidor.");
-                }
+        window.onload = () => {
+            const taLogado = localStorage.getItem('focos_logado') === 'true';
+
+            if (taLogado) {
+                // Se já logou no passado, busca os dados direto sem mostrar tela de login
+                carregarDadosDaNuvem();
             } else {
-                // Se não tiver chave, exibe a tela de login
+                // Primeira vez: esconde carregamento e mostra tela de Login para digitar a senha
+                document.getElementById('loading-screen').style.display = 'none';
                 document.getElementById('login-screen').style.display = 'flex';
             }
         };
