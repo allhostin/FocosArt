@@ -120,7 +120,10 @@
             <h2>Acesso Restrito</h2>
             <p style="font-size: 12px; color: var(--text-dim); margin-bottom: 15px;">Insira sua senha de acesso</p>
             <form onsubmit="attemptLogin(event)">
-                <input type="password" id="login-key" placeholder="Digite sua senha..." required autocomplete="off">
+                <div style="position: relative; margin-bottom: 15px;">
+                    <input type="password" id="login-key" placeholder="Digite sua senha..." required autocomplete="off" style="margin-bottom: 0; width: 100%; padding-right: 40px;">
+                    <i class="fas fa-eye" id="toggle-eye" onclick="togglePassword()" style="position: absolute; right: 15px; top: 15px; cursor: pointer; color: #888;"></i>
+                </div>
                 <button type="submit" class="primary" id="btn-login" style="width: 100%;">Entrar no Sistema</button>
             </form>
         </div>
@@ -205,13 +208,14 @@
                     <div class="input-group"><label>Nome da Empresa</label><input type="text" id="cli-empresa"></div>
                     <div class="input-group"><label>CPF / CNPJ</label><input type="text" id="cli-doc"></div>
                     <div class="input-group"><label>Telefone</label><input type="tel" id="cli-tel" oninput="maskPhone(this)" placeholder="(00) 00000-0000" maxlength="15"></div>
-                    <div class="input-group"><label>Data de Nascimento</label><input type="date" id="cli-nasc"></div>
+                    <div class="input-group"><label>Data de Nascimento</label><input type="text" id="cli-nasc" placeholder="DD/MM/AAAA" maxlength="10" oninput="maskDate(this)"></div>
                     <div class="input-group"><label>E-mail</label><input type="email" id="cli-email"></div>
                     <div class="full" style="display:flex; gap:10px;">
                         <button type="submit" class="primary" id="btn-submit-cli">Cadastrar Cliente</button>
                         <button type="button" onclick="cancelEditCli()" style="display:none; background:#333; color:#fff; border:none; padding:12px 25px; border-radius:6px; cursor:pointer;" id="btn-cancel-cli">Cancelar</button>
                     </div>
                 </form>
+                <input type="text" id="busca-cli-lista" placeholder="🔍 Buscar cliente por nome ou empresa..." oninput="renderCli()" style="width: 100%; margin-bottom: 15px; border-radius: 20px; padding: 10px 15px;">
                 <div id="cli-list"></div>
             </section>
 
@@ -225,6 +229,7 @@
                     <span style="font-size: 14px; color: var(--text-dim);">Filtrar por:</span>
                     <select id="os-filtro-mes" onchange="renderOS()" style="font-size: 13px; padding: 6px;"></select>
                     <select id="os-filtro-ano" onchange="renderOS()" style="font-size: 13px; padding: 6px;"></select>
+                    <input type="text" id="busca-os-lista" placeholder="🔍 Buscar por cliente ou descrição..." oninput="renderOS()" style="margin-left: auto; flex-grow: 1; max-width: 300px; border-radius: 20px; padding: 8px 15px;">
                 </div>
                 <div id="os-list"></div>
             </section>
@@ -306,14 +311,32 @@
         const BIN_ID = "69d95264856a6821891de0c8";
         const API_KEY_OCULTA = "$2a$10$0R9nV6JhwH7xVHsRv/1Ge.a7rZJG4qHvBD7jCNUQfG5up2.1uB5Tm";
         
-        // COLOQUE SUA SENHA PERSONALIZADA AQUI:
-        const MINHA_SENHA = "equipefocos@2025"; 
+        // Senha embaralhada (Base64). A palavra "focos" codificada é "Zm9jb3M="
+        const MINHA_SENHA_OCULTA = "equipefocos@2025"; 
+
+        function togglePassword() {
+            const input = document.getElementById('login-key');
+            const icon = document.getElementById('toggle-eye');
+            if (input.type === "password") {
+                input.type = "text"; icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash');
+            } else {
+                input.type = "password"; icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye');
+            }
+        }
+
+        function maskDate(input) {
+            let v = input.value.replace(/\D/g, '');
+            if (v.length > 2) v = v.substring(0, 2) + '/' + v.substring(2);
+            if (v.length > 5) v = v.substring(0, 5) + '/' + v.substring(5, 9);
+            input.value = v;
+        }
 
         function attemptLogin(event) {
             event.preventDefault();
             const senhaDigitada = document.getElementById('login-key').value;
             
-            if (senhaDigitada === MINHA_SENHA) {
+            // Ele codifica a senha que você digitou na hora e compara
+            if (btoa(senhaDigitada) === MINHA_SENHA_OCULTA) {
                 // Senha correta! Salva que você está logado
                 localStorage.setItem('focos_logado', 'true');
                 document.getElementById('login-screen').style.display = 'none';
@@ -542,6 +565,12 @@
         function openAgeModal(d) {
             document.getElementById('age-data-label').innerText = d.split('-').reverse().join('/');
             document.getElementById('form-age').dataset.date = d;
+            
+            // Puxa a hora atual do sistema
+            const agora = new Date();
+            const horaStr = String(agora.getHours()).padStart(2, '0') + ':' + String(agora.getMinutes()).padStart(2, '0');
+            document.getElementById('age-hora').value = horaStr;
+            
             document.getElementById('modal-age').style.display = 'flex';
         }
         
@@ -586,10 +615,19 @@
 
         function renderCli() {
             const l = document.getElementById('cli-list'); l.innerHTML = '';
-            data.clientes.forEach(c => {
+            const termoBusca = document.getElementById('busca-cli-lista').value.toLowerCase();
+
+            const clientesFiltrados = data.clientes.filter(c => 
+                c.nome.toLowerCase().includes(termoBusca) || 
+                (c.empresa && c.empresa.toLowerCase().includes(termoBusca))
+            );
+
+            clientesFiltrados.forEach(c => {
+                // Removemos o split da data, pois agora você já digita com as barras DD/MM/AAAA
+                const dataFormatada = c.nasc ? c.nasc : '-';
                 l.innerHTML += `
                 <div class="list-item">
-                    <div><strong>${c.nome}</strong><br><small>${c.empresa || 'Sem empresa'} | Nasc: ${c.nasc ? c.nasc.split('-').reverse().join('/') : '-'}</small></div>
+                    <div><strong>${c.nome}</strong><br><small>${c.empresa || 'Sem empresa'} | Nasc: ${dataFormatada}</small></div>
                     <div class="actions-group">
                         <span style="margin-right:15px; font-size:14px;">${c.tel || '-'}</span>
                         <i class="fas fa-edit action-icon" title="Editar" onclick="editCli(${c.id})"></i>
@@ -655,13 +693,16 @@
 
         function renderOS() {
             const l = document.getElementById('os-list'); l.innerHTML = '';
-            const filterM = document.getElementById('os-filtro-mes').value; const filterY = document.getElementById('os-filtro-ano').value;
+            const filterM = document.getElementById('os-filtro-mes').value; 
+            const filterY = document.getElementById('os-filtro-ano').value;
+            const termoBusca = document.getElementById('busca-os-lista').value.toLowerCase();
 
             let filteredOS = data.os.filter(o => {
                 const d = new Date(o.data);
                 const matchM = filterM === 'todos' || (d.getMonth() + 1).toString() === filterM;
                 const matchY = filterY === 'todos' || d.getFullYear().toString() === filterY;
-                return matchM && matchY;
+                const matchBusca = o.cliente.toLowerCase().includes(termoBusca) || o.desc.toLowerCase().includes(termoBusca);
+                return matchM && matchY && matchBusca;
             });
 
             filteredOS.sort((a, b) => new Date(`${b.data}T${b.hora || '00:00'}`) - new Date(`${a.data}T${a.hora || '00:00'}`));
